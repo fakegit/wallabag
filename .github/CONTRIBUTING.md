@@ -6,29 +6,84 @@
 
 - Clone the repository
 - Ensure your Docker daemon is running
-- Launch `docker-compose up`
+- Copy `docker/php/env.example` to `docker/php/env` for Docker-specific overrides
+- Launch `make dev-docker-up`
+- Launch `make dev-setup`
+
+By default, `make dev-docker-up` serves wallabag on `http://127.0.0.1:8000`.
+
+To use another host port, set `PORT` when starting the stack:
+
+```console
+PORT=8001 make dev-docker-up
+```
+
+Wallabag is then available on `http://127.0.0.1:8001`.
+
+Compose also derives the session, remember-me, and trusted-device cookie names from the selected port. This keeps logins independent when multiple stacks share `127.0.0.1`. Existing Docker development sessions require one new login after this change because their cookie names have changed.
+
+Compose normally derives its project name from the worktree directory and uses it to isolate containers, networks, and volumes. If that is not enough to isolate project resources, set `COMPOSE_PROJECT_NAME` explicitly alongside a unique port:
+
+```console
+COMPOSE_PROJECT_NAME=wallabag-master PORT=8000 make dev-docker-up
+COMPOSE_PROJECT_NAME=wallabag-feature PORT=8001 make dev-docker-up
+```
+
+Use `make dev-docker-down` when you want to tear the stack down and reset Docker volumes.
+
+Run `make dev-watch` in another terminal while working on frontend assets so Encore rebuilds them automatically.
 
 You'll then have:
-- a web server (nginx)
-- a PHP daemon (using FPM)
+- a PHP daemon with standalone web server
 - a Redis database (to handle imports)
 - a SQLite database to store articles
 
-You can now access your wallabag instance using that url: `http://127.0.0.1:8000`
+You can now access your wallabag instance at `http://127.0.0.1:8000`, or at the port selected with `PORT`.
 
-If you want to test using an other database than SQLite, uncomment the `postgres` or `mariadb` code from the `docker-compose.yml` file at the root of the repo. Also uncomment related line in the `php` section so the database will be linked to your PHP instance.
+If you want to test using an other database than SQLite, uncomment the `postgres` or `mariadb` code from the `compose.yaml` file at the root of the repo, uncomment the matching `depends_on` line in the `php` section, set `DATABASE_URL` in `.env.local`, and set the test database URL separately in `.env.test.local`.
 
 ### Using your own PHP server
 
-- Ensure you are running PHP > 7.1.
+- Ensure you are running PHP >= 8.2.
 - Clone the repository
-- Launch `composer install`
+- Run `make dev` to bootstrap wallabag and start the built-in server in `dev`
 - If you got some errors, fix them (they might be related to some missing PHP extension from your machine)
-- Then `php bin/console wallabag:install`
-- If you got some errors, fix them (they might be related to some missing PHP extension from your machine)
-- Run `php bin/console server:run`
+- If you only need to start the built-in server later, run `make run`
+- Run `make dev-watch` in another terminal if you are changing frontend assets
 
 You can now access your wallabag instance using that url: `http://127.0.0.1:8000`
+
+### Database configuration
+
+The project ships a `.env` file (committed) with `DATABASE_URL` defaulting to SQLite. For local development with a different database, create a `.env.local` file at the root of the repository (it is gitignored) and set `DATABASE_URL` there:
+
+```dotenv
+# MariaDB / MySQL
+DATABASE_URL=mysql://root:root@127.0.0.1:3306/wallabag?charset=utf8mb4
+# MariaDB / MySQL (Docker Compose)
+DATABASE_URL=mysql://root:wallaroot@mariadb:3306/wallabag?charset=utf8mb4
+# PostgreSQL
+DATABASE_URL=postgresql://wallabag:wallapass@127.0.0.1:5432/wallabag?charset=utf8
+# PostgreSQL (Docker Compose)
+DATABASE_URL=postgresql://wallabag:wallapass@postgres:5432/wallabag?charset=utf8
+```
+
+For tests, the committed `.env.test` defaults to SQLite. To run the test suite against MySQL or PostgreSQL, create a `.env.test.local` file (gitignored) at the root of the repository:
+
+```dotenv
+# MariaDB / MySQL
+DATABASE_URL=mysql://root:root@127.0.0.1:3306/wallabag_test?charset=utf8mb4
+# MariaDB / MySQL (Docker Compose)
+DATABASE_URL=mysql://root:wallaroot@mariadb:3306/wallabag_test?charset=utf8mb4
+# PostgreSQL
+DATABASE_URL=postgresql://wallabag:wallapass@127.0.0.1:5432/wallabag_test?charset=utf8
+# PostgreSQL (Docker Compose)
+DATABASE_URL=postgresql://wallabag:wallapass@postgres:5432/wallabag_test?charset=utf8
+```
+
+Make sure to use a different database name from the one in `.env.local` to avoid conflicts between your development and test environments.
+
+This applies to Docker too: keep `DATABASE_URL` in `.env.local` and `.env.test.local`, not in `docker/php/env`, so test runs can still switch to their own database.
 
 ## You found a bug
 Please [open a new issue](https://github.com/wallabag/wallabag/issues/new).
@@ -41,3 +96,21 @@ Note : If you have large portions of text, use [Github's Gist service](https://g
 
 ## You want to fix a bug or to add a feature
 Please fork wallabag and work with **the master branch**.
+
+## Run Tests and PHP formatter
+
+All pull requests need to pass the tests and the code needs match the style guide.
+
+The repository uses a GNU make `Makefile`. If your system ships a non-GNU `make`, use `gmake` for the commands below.
+
+To run the tests locally run `make test`. You can also narrow a run to specific files by appending them as extra goals, for example `make test-unit tests/unit/Helper/RedirectTest.php`.
+
+To run the PHP formatter run `make fix-cs`.
+
+To run the PHPStan static analysis run `make phpstan`.
+
+To run the JS linter run `make lint-js`.
+
+To run the SCSS linter run `make lint-scss`.
+
+To rebuild frontend assets automatically while developing run `make dev-watch`.
